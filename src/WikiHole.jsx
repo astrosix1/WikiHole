@@ -127,14 +127,16 @@ function nextReviewLabel(i){return i<=1?"tomorrow":i<7?`${i}d`:i<30?`${Math.roun
 // ── API ──────────────────────────────────────────────────────────────────────
 async function fetchWikiArticle(topic) {
   return withRetry(async()=>{
-    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:800,
-        system:"Wikipedia assistant. Reply with one JSON object only. No markdown, no prose.",
-        messages:[{role:"user",content:`JSON for "${topic}": {"title":"...","description":"one line","extract":"3-4 engaging sentences","imageUrl":"wikimedia URL or null","wikiUrl":"https://en.wikipedia.org/wiki/...","links":[{"title":"...","description":"..."},{"title":"...","description":"..."},{"title":"...","description":"..."}]}`}]})});
-    if(!res.ok)throw new Error(`API error ${res.status}`);
-    const d=await res.json();if(d.error)throw new Error(d.error.message);
-    const t=d.content?.filter(b=>b.type==="text").pop()?.text;if(!t)throw new Error("Empty");
-    return extractJSON(t);
+    const encoded=encodeURIComponent(topic.replace(/ /g,'_'));
+    const sumRes=await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`,{headers:{Accept:'application/json'}});
+    if(!sumRes.ok)throw new Error(`Wikipedia ${sumRes.status}`);
+    const sum=await sumRes.json();
+    let links=[];
+    try{
+      const relRes=await fetch(`https://en.wikipedia.org/api/rest_v1/page/related/${encoded}`,{headers:{Accept:'application/json'}});
+      if(relRes.ok){const rel=await relRes.json();links=(rel.pages||[]).slice(0,3).map(p=>({title:p.titles?.normalized||p.title,description:p.description||p.extract?.slice(0,90)||''}));}
+    }catch(_){}
+    return{title:sum.titles?.normalized||sum.title,description:sum.description||'',extract:sum.extract||'',imageUrl:sum.thumbnail?.source||null,wikiUrl:sum.content_urls?.desktop?.page||`https://en.wikipedia.org/wiki/${encoded}`,links};
   });
 }
 async function fetchQuizCards(articles) {
@@ -209,7 +211,6 @@ export default function WikiHole() {
     const stored=await loadArticle(topic);
     if(stored){memCache.current[key]=Promise.resolve(stored);return stored;}
     if(!navigator.onLine)throw new Error("offline");
-    if(!import.meta.env.VITE_ANTHROPIC_API_KEY)throw new Error("seed-only");
     const p=fetchWikiArticle(topic).then(async a=>{await saveArticle(topic,a);setCachedKeys(prev=>new Set([...prev,key]));return a;}).catch(e=>{delete memCache.current[key];throw e;});
     memCache.current[key]=p;return p;
   },[]);
@@ -228,7 +229,7 @@ export default function WikiHole() {
     try{
       const a=await getArticle(topic);setTrail([a]);setCurrentIndex(0);setAnimKey(k=>k+1);
       setCurrentSessionId(newId);await persistSession(newId,[a],0,[]);prefetchLinks(a);
-    }catch(e){setError(e.message==="offline"?"You're offline.":e.message==="seed-only"?"This topic isn't in the seed library yet. Tap 🔭 to explore the 60+ articles that are available.":`Error: ${e.message}`);}
+    }catch(e){setError(e.message==="offline"?"You're offline.":`Error: ${e.message}`);}
     finally{setLoading(false);setFetching(false);}
   };
 
@@ -281,7 +282,6 @@ export default function WikiHole() {
 
   const current=trail[currentIndex];const depth=currentIndex;
   const isLinkOffline=t=>!!SEED_ARTICLES[t.toLowerCase()]||cachedKeys.has(t.toLowerCase())||!!prefetched[t.toLowerCase()];
-  const noApiKey=!import.meta.env.VITE_ANTHROPIC_API_KEY;
   const sq=sessionQueue[sessionIndex],isCorrect=sq&&selected===sq.answer;
   const optStyle=letter=>{if(!revealed)return{bg:"#fff",border:"#e2ddd6",color:"#1c1810"};if(letter===sq.answer)return{bg:"#f0faf2",border:"#4a9a60",color:"#2a6a40"};if(letter===selected)return{bg:"#fff5f5",border:"#d05050",color:"#a03030"};return{bg:"#fafafa",border:"#ece8e2",color:"#bbb"};};
   const showSkeleton=fetching&&!current;
@@ -466,7 +466,7 @@ export default function WikiHole() {
                         )}
                         <div style={{display:"flex",gap:8}}>
                           <button className="gold-btn" style={{fontSize:10}} onClick={()=>restoreSession(s)}>Resume →</button>
-                          <button className="ghost-btn" style={{fontSize:10}} disabled={!isOnline} onClick={()=>restoreSession(s).then(()=>startNewQuiz(s.id))}>✦ Quiz</button>
+                          <button className="ghost-btn" style={{fontSize:10}} disabled={true} title="Quiz generation coming soon">✦ Quiz</button>
                         </div>
                       </div>
                     );
@@ -509,10 +509,10 @@ export default function WikiHole() {
                 </div>
                 {(current.links||[]).length>0?(
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {current.links.map((link,i)=>{const offline=isLinkOffline(link.title),unavail=(!isOnline&&!offline)||(noApiKey&&!offline);return(
+                    {current.links.map((link,i)=>{const offline=isLinkOffline(link.title),unavail=!isOnline&&!offline;return(
                       <button key={i} className="hole-btn" disabled={fetching||loading||unavail} onClick={()=>diveInto(link.title)}>
                         <div><p style={{fontFamily:"'Playfair Display',serif",fontSize:15.5,fontWeight:700,color:unavail?"#bbb":"#1c1810",marginBottom:link.description?3:0}}>{link.title}</p>{link.description&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:unavail?"#ccc":"#999"}}>{link.description}</p>}</div>
-                        <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>{offline&&!unavail&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#4a9a60"}}>ready</span>}{!isOnline&&!offline&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ccc"}}>offline</span>}{noApiKey&&!offline&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ccc"}}>seed only</span>}<span style={{color:unavail?"#ddd":"#b8832a",fontSize:18}}>→</span></div>
+                        <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>{offline&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#4a9a60"}}>ready</span>}{!isOnline&&!offline&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ccc"}}>offline</span>}<span style={{color:unavail?"#ddd":"#b8832a",fontSize:18}}>→</span></div>
                       </button>
                     );})}
                   </div>
@@ -520,7 +520,7 @@ export default function WikiHole() {
                   <p style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:"#bbb",textAlign:"center",padding:"20px 0"}}>dead end — try a new hole</p>
                 )}
                 <div style={{marginTop:24,display:"flex",gap:8}}>
-                  <button className="ghost-btn" style={{flex:1,justifyContent:"center",display:"flex"}} disabled={!isOnline||fetching} onClick={()=>startNewQuiz(currentSessionId)}>✦ Quiz</button>
+                  <button className="ghost-btn" style={{flex:1,justifyContent:"center",display:"flex"}} disabled={true} title="Quiz generation coming soon">✦ Quiz</button>
                   <button className="ghost-btn" style={{flex:1,justifyContent:"center",display:"flex"}} onClick={()=>setView("discover")}>🔭 Discover</button>
                 </div>
                 <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ccc",textAlign:"center",marginTop:28}}>{SEED_KEYS.length} instant articles · {allCards.length} cards</p>
