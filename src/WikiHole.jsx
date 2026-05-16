@@ -209,6 +209,7 @@ export default function WikiHole() {
     const stored=await loadArticle(topic);
     if(stored){memCache.current[key]=Promise.resolve(stored);return stored;}
     if(!navigator.onLine)throw new Error("offline");
+    if(!import.meta.env.VITE_ANTHROPIC_API_KEY)throw new Error("seed-only");
     const p=fetchWikiArticle(topic).then(async a=>{await saveArticle(topic,a);setCachedKeys(prev=>new Set([...prev,key]));return a;}).catch(e=>{delete memCache.current[key];throw e;});
     memCache.current[key]=p;return p;
   },[]);
@@ -227,7 +228,7 @@ export default function WikiHole() {
     try{
       const a=await getArticle(topic);setTrail([a]);setCurrentIndex(0);setAnimKey(k=>k+1);
       setCurrentSessionId(newId);await persistSession(newId,[a],0,[]);prefetchLinks(a);
-    }catch(e){setError(e.message==="offline"?"You're offline.":`Error: ${e.message}`);}
+    }catch(e){setError(e.message==="offline"?"You're offline.":e.message==="seed-only"?"This topic isn't in the seed library yet. Tap 🔭 to explore the 60+ articles that are available.":`Error: ${e.message}`);}
     finally{setLoading(false);setFetching(false);}
   };
 
@@ -280,6 +281,7 @@ export default function WikiHole() {
 
   const current=trail[currentIndex];const depth=currentIndex;
   const isLinkOffline=t=>!!SEED_ARTICLES[t.toLowerCase()]||cachedKeys.has(t.toLowerCase())||!!prefetched[t.toLowerCase()];
+  const noApiKey=!import.meta.env.VITE_ANTHROPIC_API_KEY;
   const sq=sessionQueue[sessionIndex],isCorrect=sq&&selected===sq.answer;
   const optStyle=letter=>{if(!revealed)return{bg:"#fff",border:"#e2ddd6",color:"#1c1810"};if(letter===sq.answer)return{bg:"#f0faf2",border:"#4a9a60",color:"#2a6a40"};if(letter===selected)return{bg:"#fff5f5",border:"#d05050",color:"#a03030"};return{bg:"#fafafa",border:"#ece8e2",color:"#bbb"};};
   const showSkeleton=fetching&&!current;
@@ -507,10 +509,10 @@ export default function WikiHole() {
                 </div>
                 {(current.links||[]).length>0?(
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {current.links.map((link,i)=>{const offline=isLinkOffline(link.title),unavail=!isOnline&&!offline;return(
+                    {current.links.map((link,i)=>{const offline=isLinkOffline(link.title),unavail=(!isOnline&&!offline)||(noApiKey&&!offline);return(
                       <button key={i} className="hole-btn" disabled={fetching||loading||unavail} onClick={()=>diveInto(link.title)}>
                         <div><p style={{fontFamily:"'Playfair Display',serif",fontSize:15.5,fontWeight:700,color:unavail?"#bbb":"#1c1810",marginBottom:link.description?3:0}}>{link.title}</p>{link.description&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:unavail?"#ccc":"#999"}}>{link.description}</p>}</div>
-                        <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>{offline&&!unavail&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#4a9a60"}}>ready</span>}{unavail&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ccc"}}>offline</span>}<span style={{color:unavail?"#ddd":"#b8832a",fontSize:18}}>→</span></div>
+                        <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>{offline&&!unavail&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#4a9a60"}}>ready</span>}{!isOnline&&!offline&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ccc"}}>offline</span>}{noApiKey&&!offline&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ccc"}}>seed only</span>}<span style={{color:unavail?"#ddd":"#b8832a",fontSize:18}}>→</span></div>
                       </button>
                     );})}
                   </div>
