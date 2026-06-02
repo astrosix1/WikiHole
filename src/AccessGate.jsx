@@ -4,6 +4,10 @@ import { supabase } from './lib/supabase';
 const ESSENTIALS_SLUG = 'basic'; // Essentials plan slug in Supabase projects table
 
 export function AccessGate({ children }) {
+  // In local dev, bypass auth entirely so you can test the UI without a subscription.
+  // This flag is stripped out in production builds by Vite.
+  if (import.meta.env.DEV) return children;
+
   // 'loading' | 'granted' | 'unauthenticated' | 'denied' | 'no-supabase'
   const [state, setState] = useState('loading');
 
