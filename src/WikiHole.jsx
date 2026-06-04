@@ -128,6 +128,8 @@ export default function WikiHole() {
   const [imgError,setImgError]         = useState(false);
   const [sessions,setSessions]         = useState([]);
   const [currentSessionId,setCurrentSessionId] = useState(null);
+  const [favoritedIds,setFavoritedIds] = useState(()=>{try{return new Set(JSON.parse(localStorage.getItem("wh_favorites")||"[]"));}catch{return new Set();}});
+  const [trailSearch,setTrailSearch]   = useState("");
   const [allCards,setAllCards]         = useState([]);
   const [view,setView]                 = useState("article"); // article|trails|discover|quiz|review
   const [sessionQueue,setSessionQueue] = useState([]);
@@ -332,7 +334,36 @@ export default function WikiHole() {
               <div style={{marginTop:24,marginBottom:16}}>
                 <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:"#1c1810",marginBottom:4}}>Discover</h2>
                 <p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#aaa",marginBottom:16}}>{SEED_KEYS.length} articles · all instant load</p>
-                <input className="search-input" placeholder="search articles…" value={discoverSearch} onChange={e=>setDiscoverSearch(e.target.value)}/>
+
+                {/* ── Custom topic input ── */}
+                <div style={{marginBottom:16,padding:"14px 16px",background:"#faf8f4",border:"1.5px solid #e8dcc8",borderRadius:10}}>
+                  <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#b8832a",letterSpacing:"0.08em",marginBottom:8}}>✦ START WITH ANY TOPIC</p>
+                  <form
+                    onSubmit={e=>{
+                      e.preventDefault();
+                      const val=e.target.elements.customTopic.value.trim();
+                      if(val){startWith(val);e.target.reset();}
+                    }}
+                    style={{display:"flex",gap:8}}
+                  >
+                    <input
+                      name="customTopic"
+                      className="search-input"
+                      placeholder="type any Wikipedia topic…"
+                      style={{flex:1,marginBottom:0}}
+                      autoComplete="off"
+                      maxLength={120}
+                    />
+                    <button
+                      type="submit"
+                      className="gold-btn"
+                      style={{whiteSpace:"nowrap",padding:"0 16px"}}
+                    >Go →</button>
+                  </form>
+                  <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#bbb",marginTop:6}}>e.g. "Black hole", "Napoleon", "Coral reefs"</p>
+                </div>
+
+                <input className="search-input" placeholder="search seed articles…" value={discoverSearch} onChange={e=>setDiscoverSearch(e.target.value)}/>
               </div>
 
               {filteredDiscover ? (
@@ -380,56 +411,86 @@ export default function WikiHole() {
           {/* ── TRAILS VIEW ── */}
           {view==="trails"&&(
             <div className="card-in">
-              <div style={{marginTop:24,marginBottom:20,display:"flex",alignItems:"baseline",justifyContent:"space-between"}}>
+              <div style={{marginTop:24,marginBottom:12,display:"flex",alignItems:"baseline",justifyContent:"space-between"}}>
                 <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:"#1c1810"}}>Your Rabbit Holes</h2>
                 <button className="gold-btn" disabled={!isOnline} onClick={()=>{setView("discover");}}>+ New</button>
               </div>
+              {sessions.length>0&&(
+                <input
+                  className="search-input"
+                  placeholder="search trails…"
+                  value={trailSearch}
+                  onChange={e=>setTrailSearch(e.target.value)}
+                  style={{marginBottom:16}}
+                />
+              )}
               {sessions.length===0?(
                 <div style={{textAlign:"center",padding:"48px 20px",color:"#bbb"}}><div style={{fontSize:36,marginBottom:12}}>🕳</div><p style={{fontFamily:"'DM Mono',monospace",fontSize:12,letterSpacing:"0.08em"}}>no trails yet — start exploring</p></div>
-              ):(
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {sessions.map(s=>{
-                    const m=getSessionMastery(s.id),pct=m.total?Math.round((m.mastered/m.total)*100):0,isCur=s.id===currentSessionId;
-                    return(
-                      <div key={s.id} className="session-card" style={{borderColor:isCur?"#b8832a":"#e2ddd6",background:isCur?"#fffbf3":"#fff"}}>
-                        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:10}}>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                              <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:700,color:"#1c1810",lineHeight:1.2}}>{s.name}</h3>
-                              {isCur&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#b8832a",background:"#b8832a18",border:"1px solid #b8832a44",padding:"1px 6px",borderRadius:4,flexShrink:0}}>current</span>}
-                            </div>
-                            <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#aaa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                              {s.trailTitles.map((t,i)=>(i>0?" › ":"")+(t.length>18?t.slice(0,18)+"…":t)).join("")}
-                            </p>
+              ):(()=>{
+                const filtered=sessions.filter(s=>!trailSearch.trim()||s.name.toLowerCase().includes(trailSearch.toLowerCase())||s.trailTitles.some(t=>t.toLowerCase().includes(trailSearch.toLowerCase())));
+                const favs=filtered.filter(s=>favoritedIds.has(s.id));
+                const rest=filtered.filter(s=>!favoritedIds.has(s.id));
+                const renderSession=s=>{
+                  const m=getSessionMastery(s.id),pct=m.total?Math.round((m.mastered/m.total)*100):0,isCur=s.id===currentSessionId,isFav=favoritedIds.has(s.id);
+                  const toggleFav=()=>{
+                    setFavoritedIds(prev=>{
+                      const next=new Set(prev);
+                      if(next.has(s.id))next.delete(s.id);else next.add(s.id);
+                      localStorage.setItem("wh_favorites",JSON.stringify([...next]));
+                      return next;
+                    });
+                  };
+                  return(
+                    <div key={s.id} className="session-card" style={{borderColor:isCur?"#b8832a":isFav?"#c8a85a":"#e2ddd6",background:isCur?"#fffbf3":isFav?"#fffdf5":"#fff"}}>
+                      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:10}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                            <button onClick={toggleFav} style={{background:"none",border:"none",cursor:"pointer",padding:"0 2px",fontSize:15,lineHeight:1}} title={isFav?"Unfavorite":"Favorite"}>{isFav?"★":"☆"}</button>
+                            <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:700,color:"#1c1810",lineHeight:1.2}}>{s.name}</h3>
+                            {isCur&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#b8832a",background:"#b8832a18",border:"1px solid #b8832a44",padding:"1px 6px",borderRadius:4,flexShrink:0}}>current</span>}
                           </div>
-                          <div style={{textAlign:"right",flexShrink:0}}>
-                            <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#bbb",marginBottom:3}}>{timeAgo(s.updatedAt)}</div>
-                            <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#b8832a"}}>{s.trailTitles.length-1} deep</div>
-                          </div>
+                          <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#aaa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {s.trailTitles.map((t,i)=>(i>0?" › ":"")+(t.length>18?t.slice(0,18)+"…":t)).join("")}
+                          </p>
                         </div>
-                        <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:m.total?10:0}}>
-                          {Array.from({length:Math.min(s.trailTitles.length,12)}).map((_,i)=>(
-                            <div key={i} style={{width:4,height:4,borderRadius:"50%",background:i===s.currentIndex?"#b8832a":i<s.trailTitles.length?"#d8d0c4":"#eee"}}/>
-                          ))}
-                        </div>
-                        {m.total>0&&(
-                          <div style={{marginBottom:12}}>
-                            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                              <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#bbb",letterSpacing:"0.06em"}}>QUIZ MASTERY</span>
-                              <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:pct===100?"#4a9a60":"#b8832a"}}>{m.mastered}/{m.total} {pct===100?"✓":`${pct}%`}</span>
-                            </div>
-                            <div style={{height:3,background:"#ece8e2",borderRadius:2}}><div style={{height:"100%",width:`${pct}%`,background:pct===100?"#4a9a60":"#b8832a",borderRadius:2}}/></div>
-                          </div>
-                        )}
-                        <div style={{display:"flex",gap:8}}>
-                          <button className="gold-btn" style={{fontSize:10}} onClick={()=>restoreSession(s)}>Resume →</button>
-                          <button className="ghost-btn" style={{fontSize:10}} onClick={()=>startNewQuiz(currentSessionId)} title="Generate a quiz from this trail">✦ Quiz</button>
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#bbb",marginBottom:3}}>{timeAgo(s.updatedAt)}</div>
+                          <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#b8832a"}}>{s.trailTitles.length-1} deep</div>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:m.total?10:0}}>
+                        {Array.from({length:Math.min(s.trailTitles.length,12)}).map((_,i)=>(
+                          <div key={i} style={{width:4,height:4,borderRadius:"50%",background:i===s.currentIndex?"#b8832a":i<s.trailTitles.length?"#d8d0c4":"#eee"}}/>
+                        ))}
+                      </div>
+                      {m.total>0&&(
+                        <div style={{marginBottom:12}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                            <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#bbb",letterSpacing:"0.06em"}}>QUIZ MASTERY</span>
+                            <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:pct===100?"#4a9a60":"#b8832a"}}>{m.mastered}/{m.total} {pct===100?"✓":`${pct}%`}</span>
+                          </div>
+                          <div style={{height:3,background:"#ece8e2",borderRadius:2}}><div style={{height:"100%",width:`${pct}%`,background:pct===100?"#4a9a60":"#b8832a",borderRadius:2}}/></div>
+                        </div>
+                      )}
+                      <div style={{display:"flex",gap:8}}>
+                        <button className="gold-btn" style={{fontSize:10}} onClick={()=>restoreSession(s)}>Resume →</button>
+                        <button className="ghost-btn" style={{fontSize:10}} onClick={()=>startNewQuiz(s.id)} title="Generate a quiz from this trail">✦ Quiz</button>
+                      </div>
+                    </div>
+                  );
+                };
+                return(
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {favs.length>0&&<>
+                      <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#b8832a",letterSpacing:"0.08em",marginBottom:-2}}>★ FAVORITES</p>
+                      {favs.map(renderSession)}
+                      {rest.length>0&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ccc",letterSpacing:"0.08em",marginBottom:-2,marginTop:4}}>ALL TRAILS</p>}
+                    </>}
+                    {rest.map(renderSession)}
+                    {filtered.length===0&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:"#bbb",textAlign:"center",padding:"24px 0"}}>no matching trails</p>}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
