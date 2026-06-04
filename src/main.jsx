@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import WikiHole from './WikiHole.jsx';
 import { AccessGate } from './AccessGate.jsx';
+import { ErrorBoundary } from './ErrorBoundary.jsx';
 
 // localStorage polyfill for window.storage (Claude artifact API)
 window.storage = {
@@ -24,8 +25,10 @@ window.storage = {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <AccessGate>
-      <WikiHole />
-    </AccessGate>
+    <ErrorBoundary>
+      <AccessGate>
+        <WikiHole />
+      </AccessGate>
+    </ErrorBoundary>
   </StrictMode>
 );
