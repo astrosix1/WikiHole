@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import DOMPurify from 'dompurify';
 import SEED_ARTICLES from './data/seeds.js';
 
 // Ensure window.storage is always defined (fallback for non-Claude-artifact environments)
@@ -49,6 +50,12 @@ function timeAgo(ts) {
   if(d<m)return"just now";if(d<h)return`${Math.floor(d/m)}m ago`;
   if(d<day)return`${Math.floor(d/h)}h ago`;if(d<day*7)return`${Math.floor(d/day)}d ago`;
   return new Date(ts).toLocaleDateString();
+}
+
+// ── Security: XSS Prevention ──────────────────────────────────────────────────
+function sanitizeText(text) {
+  if (!text) return '';
+  return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 }
 
 // ── Storage ──────────────────────────────────────────────────────────────────
@@ -516,9 +523,9 @@ export default function WikiHole() {
                   </div>
                 )}
                 <div style={{marginTop:22}}>
-                  {current.description&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#b8832a",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>{current.description}</p>}
-                  <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(24px,5.5vw,36px)",fontWeight:700,lineHeight:1.15,letterSpacing:"-0.02em",color:"#1c1810",marginBottom:14}}>{current.title}</h1>
-                  <p style={{fontSize:16,lineHeight:1.85,color:"#4a4438"}}>{current.extract}</p>
+                  {current.description&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#b8832a",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>{sanitizeText(current.description)}</p>}
+                  <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(24px,5.5vw,36px)",fontWeight:700,lineHeight:1.15,letterSpacing:"-0.02em",color:"#1c1810",marginBottom:14}}>{sanitizeText(current.title)}</h1>
+                  <p style={{fontSize:16,lineHeight:1.85,color:"#4a4438"}}>{sanitizeText(current.extract)}</p>
                   {current.wikiUrl&&(<div style={{marginTop:14}}><a href={current.wikiUrl} target="_blank" rel="noopener noreferrer" className="wiki-link"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Read full article on Wikipedia</a></div>)}
                   {(()=>{const m=getSessionMastery(currentSessionId);if(!m.total)return null;const pct=Math.round((m.mastered/m.total)*100);return(<div style={{marginTop:14,display:"flex",alignItems:"center",gap:10}}><div style={{flex:1,height:3,background:"#e8e4dc",borderRadius:2}}><div style={{height:"100%",width:`${pct}%`,background:pct===100?"#4a9a60":"#b8832a",borderRadius:2,transition:"width 0.4s"}}/></div><span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:pct===100?"#4a9a60":"#b8832a",whiteSpace:"nowrap"}}>{m.mastered}/{m.total} mastered</span></div>);})()}
                 </div>
@@ -529,7 +536,7 @@ export default function WikiHole() {
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     {current.links.map((link,i)=>{const offline=isLinkOffline(link.title),unavail=!isOnline&&!offline;return(
                       <button key={i} className="hole-btn" disabled={fetching||loading||unavail} onClick={()=>diveInto(link.title)}>
-                        <div><p style={{fontFamily:"'Playfair Display',serif",fontSize:15.5,fontWeight:700,color:unavail?"#bbb":"#1c1810",marginBottom:link.description?3:0}}>{link.title}</p>{link.description&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:unavail?"#ccc":"#999"}}>{link.description}</p>}</div>
+                        <div><p style={{fontFamily:"'Playfair Display',serif",fontSize:15.5,fontWeight:700,color:unavail?"#bbb":"#1c1810",marginBottom:link.description?3:0}}>{sanitizeText(link.title)}</p>{link.description&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:unavail?"#ccc":"#999"}}>{sanitizeText(link.description)}</p>}</div>
                         <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>{offline&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#4a9a60"}}>ready</span>}{!isOnline&&!offline&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ccc"}}>offline</span>}<span style={{color:unavail?"#ddd":"#b8832a",fontSize:18}}>→</span></div>
                       </button>
                     );})}
