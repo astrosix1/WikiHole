@@ -545,7 +545,7 @@ export default function WikiHole() {
                   <p style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:"#bbb",textAlign:"center",padding:"20px 0"}}>dead end — try a new hole</p>
                 )}
                 <div style={{marginTop:24,display:"flex",gap:8}}>
-                  <button className="ghost-btn" style={{flex:1,justifyContent:"center",display:"flex"}} onClick={()=>startNewQuiz(s.id)} title="Generate a quiz">✦ Quiz</button>
+                  <button className="ghost-btn" style={{flex:1,justifyContent:"center",display:"flex"}} onClick={()=>startNewQuiz(currentSessionId)} title="Generate a quiz">✦ Quiz</button>
                   <button className="ghost-btn" style={{flex:1,justifyContent:"center",display:"flex"}} onClick={()=>setView("discover")}>🔭 Discover</button>
                 </div>
                 <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ccc",textAlign:"center",marginTop:28}}>{SEED_KEYS.length} instant articles · {allCards.length} cards</p>
