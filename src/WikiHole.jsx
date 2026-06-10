@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import DOMPurify from 'dompurify';
 import SEED_ARTICLES from './data/seeds.js';
+import { generateQuizCardsLocally } from './utils/quizGenerator.js';
 
 // Ensure window.storage is always defined (fallback for non-Claude-artifact environments)
 if (!window.storage) {
@@ -105,15 +106,26 @@ async function fetchWikiArticle(topic) {
   });
 }
 async function fetchQuizCards(articles) {
-  // Proxied through /api/quiz — API key stays server-side
-  return withRetry(async()=>{
+  // Try the server-side API first (requires ANTHROPIC_API_KEY set in Vercel).
+  // On any failure, fall back to the local generator — no key needed.
+  try {
     const res=await fetch('/api/quiz',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({articles})});
-    if(!res.ok)throw new Error();
-    const d=await res.json();if(d.error)throw new Error(d.error);
-    const t=d.content?.filter(b=>b.type==='text').pop()?.text;if(!t)throw new Error('Empty response');
-    const p=extractJSON(t);if(!Array.isArray(p))throw new Error('Not array');return p;
-  },4,2000);
+    if(res.ok){
+      const d=await res.json();
+      if(!d.error){
+        const t=d.content?.filter(b=>b.type==='text').pop()?.text;
+        if(t){const p=extractJSON(t);if(Array.isArray(p)&&p.length)return p;}
+      }
+    }
+  } catch(_) {
+    // API unreachable — fall through to local generator
+  }
+
+  // Local generation — works with no API key, no network required
+  const cards=generateQuizCardsLocally(articles);
+  if(!cards.length)throw new Error('Not enough article content to generate questions — try diving deeper first.');
+  return cards;
 }
 
 // ── Skeleton ─────────────────────────────────────────────────────────────────
