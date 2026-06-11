@@ -625,6 +625,15 @@ export default function WikiHole() {
             ):null
           )}
         </main>
+
+        {/* ── License / attribution (Wikipedia CC BY-SA compliance) ── */}
+        <footer style={{padding:"22px 20px 34px",borderTop:"1px solid #e2ddd6",textAlign:"center"}}>
+          <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,lineHeight:1.7,color:"#b3ada3",letterSpacing:"0.02em"}}>
+            Article text from <a href="https://en.wikipedia.org" target="_blank" rel="noopener noreferrer" style={{color:"#a8935e",textDecoration:"underline"}}>Wikipedia</a>, available under{" "}
+            <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer" style={{color:"#a8935e",textDecoration:"underline"}}>CC&nbsp;BY-SA&nbsp;4.0</a>.
+            <br/>WikiHole is not affiliated with or endorsed by the Wikimedia Foundation.
+          </p>
+        </footer>
       </div>
     </>
   );
