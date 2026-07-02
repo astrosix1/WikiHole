@@ -351,7 +351,15 @@ export default function WikiHole() {
           {view==="discover"&&(
             <div className="card-in">
               <div style={{marginTop:24,marginBottom:16}}>
-                <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:"#1c1810",marginBottom:4}}>Discover</h2>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                  <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:"#1c1810"}}>Discover</h2>
+                  <button
+                    className="ghost-btn"
+                    style={{fontSize:11,padding:"5px 12px"}}
+                    onClick={()=>startWith(SEED_ARTICLES[SEED_KEYS[Math.floor(Math.random()*SEED_KEYS.length)]].title)}
+                    title="Jump to a random article"
+                  >🎲 Surprise me</button>
+                </div>
                 <p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#aaa",marginBottom:16}}>{SEED_KEYS.length} articles · all instant load</p>
 
                 {/* ── Custom topic input ── */}
