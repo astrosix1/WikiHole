@@ -163,7 +163,7 @@ export default function WikiHole() {
   const [activeQuizSessionId,setActiveQuizSessionId] = useState(null);
   const [discoverSearch,setDiscoverSearch] = useState("");
 
-  const memCache=useRef({});const prefetchPaused=useRef(false);const trailRef=useRef(null);
+  const memCache=useRef({});const prefetchPaused=useRef(false);const trailRef=useRef(null);const lastAttempt=useRef(null);
 
   useEffect(()=>{
     const on=()=>setIsOnline(true),off=()=>setIsOnline(false);
@@ -200,6 +200,7 @@ export default function WikiHole() {
   const isFast=topic=>!!SEED_ARTICLES[topic.toLowerCase()]||cachedKeys.has(topic.toLowerCase())||!!prefetched[topic.toLowerCase()];
 
   const startWith=async(topic)=>{
+    lastAttempt.current={type:"start",topic};
     setError(null);setImgError(false);setView("article");
     setLoadingMsg(LOADING_MSGS[Math.floor(Math.random()*LOADING_MSGS.length)]);
     memCache.current={};setPrefetched({});const newId=makeSessionId();
@@ -213,6 +214,7 @@ export default function WikiHole() {
 
   const diveInto=async(title)=>{
     if(!isFast(title)&&!isOnline){setError("Offline and not cached.");return;}
+    lastAttempt.current={type:"dive",topic:title};
     setError(null);setImgError(false);setLoadingMsg(LOADING_MSGS[Math.floor(Math.random()*LOADING_MSGS.length)]);
     if(isFast(title))setLoading(true);else setFetching(true);
     try{
@@ -223,6 +225,12 @@ export default function WikiHole() {
       setTimeout(()=>{if(trailRef.current)trailRef.current.scrollLeft=trailRef.current.scrollWidth;window.scrollTo({top:0,behavior:"smooth"});},100);
     }catch(e){setError(`Error: ${e.message}`);}
     finally{setLoading(false);setFetching(false);}
+  };
+
+  const retryLastAttempt=()=>{
+    const attempt=lastAttempt.current;
+    if(!attempt)return;
+    if(attempt.type==="start")startWith(attempt.topic);else diveInto(attempt.topic);
   };
 
   const jumpTo=i=>{setCurrentIndex(i);setAnimKey(k=>k+1);setImgError(false);window.scrollTo({top:0,behavior:"smooth"});if(trail[i])prefetchLinks(trail[i]);const es=sessions.find(s=>s.id===currentSessionId);persistSession(currentSessionId,trail,i,es?.quizCardIds||[]);};
@@ -295,7 +303,8 @@ export default function WikiHole() {
         .hole-btn:hover:not(:disabled){border-color:#b8832a;transform:translateX(4px);box-shadow:0 2px 8px rgba(184,131,42,0.12);}
         .hole-btn:disabled{opacity:0.4;cursor:not-allowed;}
         .discover-btn{width:100%;background:#fff;border:1.5px solid #e2ddd6;border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left;transition:all 0.15s;display:flex;align-items:center;gap:10px;box-shadow:0 1px 2px rgba(0,0,0,0.04);}
-        .discover-btn:hover{border-color:#b8832a;background:#fffdf8;}
+        .discover-btn:hover:not(:disabled){border-color:#b8832a;background:#fffdf8;}
+        .discover-btn:disabled{opacity:0.45;cursor:not-allowed;}
         .session-card{width:100%;background:#fff;border:1.5px solid #e2ddd6;border-radius:14px;padding:18px;text-align:left;transition:all 0.2s;box-shadow:0 1px 4px rgba(0,0,0,0.04);}
         .session-card:hover{border-color:#b8832a;box-shadow:0 3px 12px rgba(184,131,42,0.1);transform:translateY(-1px);}
         .opt-btn{width:100%;border-radius:10px;padding:13px 15px;cursor:pointer;font-family:'Lora',Georgia,serif;font-size:15px;line-height:1.5;transition:all 0.15s;display:flex;align-items:flex-start;gap:10px;border-width:1.5px;border-style:solid;text-align:left;}
@@ -366,6 +375,7 @@ export default function WikiHole() {
                   <button
                     className="ghost-btn"
                     style={{fontSize:11,padding:"5px 12px"}}
+                    disabled={fetching||loading}
                     onClick={()=>startWith(SEED_ARTICLES[SEED_KEYS[Math.floor(Math.random()*SEED_KEYS.length)]].title)}
                     title="Jump to a random article"
                   >🎲 Surprise me</button>
@@ -390,11 +400,13 @@ export default function WikiHole() {
                       style={{flex:1,marginBottom:0}}
                       autoComplete="off"
                       maxLength={120}
+                      disabled={fetching||loading}
                     />
                     <button
                       type="submit"
                       className="gold-btn"
                       style={{whiteSpace:"nowrap",padding:"0 16px"}}
+                      disabled={fetching||loading}
                     >Go →</button>
                   </form>
                   <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#bbb",marginTop:6}}>e.g. "Black hole", "Napoleon", "Coral reefs"</p>
@@ -410,7 +422,7 @@ export default function WikiHole() {
                     : filteredDiscover.map(key=>{
                         const a=SEED_ARTICLES[key];
                         return(
-                          <button key={key} className="discover-btn" onClick={()=>startWith(a.title)}>
+                          <button key={key} className="discover-btn" disabled={fetching||loading} onClick={()=>startWith(a.title)}>
                             <div style={{flex:1,minWidth:0}}>
                               <p style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:"#1c1810",marginBottom:2}}>{a.title}</p>
                               <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#999",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.description}</p>
@@ -429,7 +441,7 @@ export default function WikiHole() {
                       {keys.map(key=>{
                         const a=SEED_ARTICLES[key];if(!a)return null;
                         return(
-                          <button key={key} className="discover-btn" onClick={()=>startWith(a.title)}>
+                          <button key={key} className="discover-btn" disabled={fetching||loading} onClick={()=>startWith(a.title)}>
                             <div style={{flex:1,minWidth:0}}>
                               <p style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:"#1c1810",marginBottom:2}}>{a.title}</p>
                               <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#999",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.description}</p>
@@ -541,14 +553,17 @@ export default function WikiHole() {
             ):error?(
               <div style={{margin:"36px 0",padding:"20px",background:"#fff5f5",border:"1px solid #f0c8c8",borderRadius:12,textAlign:"center"}}>
                 <p style={{color:"#c05050",marginBottom:14,lineHeight:1.6}}>{error}</p>
-                {isOnline&&<button className="new-btn" onClick={()=>setView("discover")}>browse topics</button>}
+                <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+                  {isOnline&&lastAttempt.current&&<button className="gold-btn" onClick={retryLastAttempt}>↺ try again</button>}
+                  {isOnline&&<button className="new-btn" onClick={()=>setView("discover")}>browse topics</button>}
+                </div>
               </div>
             ):showSkeleton?<ArticleSkeleton/>
             :current?(
               <div key={animKey} className="card-in">
                 {current.imageUrl&&!imgError&&(
                   <div style={{margin:"22px 0 0",borderRadius:14,overflow:"hidden",height:210,background:"#e8e4dc",position:"relative",boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
-                    <img src={current.imageUrl} alt={current.title} onError={()=>setImgError(true)} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                    <img src={current.imageUrl} alt={current.title} loading="lazy" decoding="async" onError={()=>setImgError(true)} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
                     <div style={{position:"absolute",inset:0,background:"linear-gradient(to bottom, transparent 55%, rgba(245,242,236,0.65))"}}/>
                   </div>
                 )}
