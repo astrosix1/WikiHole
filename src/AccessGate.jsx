@@ -4,14 +4,15 @@ import { supabase } from './lib/supabase';
 const ESSENTIALS_SLUG = 'basic'; // Essentials plan slug in Supabase projects table
 
 export function AccessGate({ children }) {
-  // In local dev, bypass auth entirely so you can test the UI without a subscription.
-  // This flag is stripped out in production builds by Vite.
-  if (import.meta.env.DEV) return children;
-
   // 'loading' | 'granted' | 'unauthenticated' | 'denied' | 'no-supabase'
-  const [state, setState] = useState('loading');
+  // In local dev, start pre-granted so you can test the UI without a subscription.
+  // This flag is stripped out in production builds by Vite.
+  const [state, setState] = useState(import.meta.env.DEV ? 'granted' : 'loading');
 
   useEffect(() => {
+    // Hooks must run unconditionally on every render — the dev bypass only
+    // decides the *initial* state above, not whether effects run at all.
+    if (import.meta.env.DEV) return;
     if (!supabase) { setState('no-supabase'); return; }
     init();
   }, []);
