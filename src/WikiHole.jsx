@@ -140,6 +140,7 @@ export default function WikiHole() {
   const [loading,setLoading]           = useState(true);
   const [loadingMsg,setLoadingMsg]     = useState("falling deeper…");
   const [error,setError]               = useState(null);
+  const [lastFailedAction,setLastFailedAction] = useState(null); // {type:'start'|'dive'|'restore', topic|session} — powers the Retry button
   const [animKey,setAnimKey]           = useState(0);
   const [isOnline,setIsOnline]         = useState(navigator.onLine);
   const [cachedKeys,setCachedKeys]     = useState(new Set());
@@ -206,30 +207,44 @@ export default function WikiHole() {
     if(isFast(topic))setLoading(true);else setFetching(true);
     try{
       const a=await getArticle(topic);setTrail([a]);setCurrentIndex(0);setAnimKey(k=>k+1);
-      setCurrentSessionId(newId);await persistSession(newId,[a],0,[]);prefetchLinks(a);
-    }catch(e){setError(e.message==="offline"?"You're offline.":`Error: ${e.message}`);}
+      setCurrentSessionId(newId);await persistSession(newId,[a],0,[]);prefetchLinks(a);setLastFailedAction(null);
+    }catch(e){setError(e.message==="offline"?"You're offline.":`Error: ${e.message}`);setLastFailedAction({type:"start",topic});}
     finally{setLoading(false);setFetching(false);}
   };
 
   const diveInto=async(title)=>{
-    if(!isFast(title)&&!isOnline){setError("Offline and not cached.");return;}
+    if(!isFast(title)&&!isOnline){setError("Offline and not cached.");setLastFailedAction({type:"dive",topic:title});return;}
     setError(null);setImgError(false);setLoadingMsg(LOADING_MSGS[Math.floor(Math.random()*LOADING_MSGS.length)]);
     if(isFast(title))setLoading(true);else setFetching(true);
     try{
       const a=await getArticle(title);const newTrail=[...trail.slice(0,currentIndex+1),a];const newIdx=currentIndex+1;
       setTrail(newTrail);setCurrentIndex(newIdx);setAnimKey(k=>k+1);
       const es=sessions.find(s=>s.id===currentSessionId);
-      await persistSession(currentSessionId,newTrail,newIdx,es?.quizCardIds||[]);prefetchLinks(a);
+      await persistSession(currentSessionId,newTrail,newIdx,es?.quizCardIds||[]);prefetchLinks(a);setLastFailedAction(null);
       setTimeout(()=>{if(trailRef.current)trailRef.current.scrollLeft=trailRef.current.scrollWidth;window.scrollTo({top:0,behavior:"smooth"});},100);
-    }catch(e){setError(`Error: ${e.message}`);}
+    }catch(e){setError(`Error: ${e.message}`);setLastFailedAction({type:"dive",topic:title});}
     finally{setLoading(false);setFetching(false);}
+  };
+
+  const retryLastAction=()=>{
+    if(!lastFailedAction)return;
+    if(lastFailedAction.type==="start")startWith(lastFailedAction.topic);
+    else if(lastFailedAction.type==="restore")restoreSession(lastFailedAction.session);
+    else diveInto(lastFailedAction.topic);
   };
 
   const jumpTo=i=>{setCurrentIndex(i);setAnimKey(k=>k+1);setImgError(false);window.scrollTo({top:0,behavior:"smooth"});if(trail[i])prefetchLinks(trail[i]);const es=sessions.find(s=>s.id===currentSessionId);persistSession(currentSessionId,trail,i,es?.quizCardIds||[]);};
   const restoreSession=async session=>{
     setLoading(true);setError(null);setImgError(false);setView("article");setLoadingMsg("restoring your trail…");
-    try{const arts=await Promise.all(session.trailTitles.map(t=>getArticle(t).catch(()=>null)));const valid=arts.filter(Boolean);const idx=Math.min(session.currentIndex,valid.length-1);setTrail(valid);setCurrentIndex(idx);setAnimKey(k=>k+1);setCurrentSessionId(session.id);valid.forEach(a=>{memCache.current[a.title.toLowerCase()]=Promise.resolve(a);});prefetchLinks(valid[idx]);}
-    catch(e){setError(`Restore failed: ${e.message}`);}finally{setLoading(false);}
+    try{
+      const arts=await Promise.all(session.trailTitles.map(t=>getArticle(t).catch(()=>null)));const valid=arts.filter(Boolean);
+      if(!valid.length){
+        setError(isOnline?"Couldn't restore this trail — none of its articles could be loaded.":"Couldn't restore this trail while offline — none of its articles are cached.");
+        setLastFailedAction({type:"restore",session});return;
+      }
+      const idx=Math.min(session.currentIndex,valid.length-1);setTrail(valid);setCurrentIndex(idx);setAnimKey(k=>k+1);setCurrentSessionId(session.id);valid.forEach(a=>{memCache.current[a.title.toLowerCase()]=Promise.resolve(a);});prefetchLinks(valid[idx]);setLastFailedAction(null);
+    }
+    catch(e){setError(`Restore failed: ${e.message}`);setLastFailedAction({type:"restore",session});}finally{setLoading(false);}
   };
 
   const dueCards=allCards.filter(isDue),dueCount=dueCards.length;
@@ -523,7 +538,10 @@ export default function WikiHole() {
             ):error?(
               <div style={{margin:"36px 0",padding:"20px",background:"#fff5f5",border:"1px solid #f0c8c8",borderRadius:12,textAlign:"center"}}>
                 <p style={{color:"#c05050",marginBottom:14,lineHeight:1.6}}>{error}</p>
-                {isOnline&&<button className="new-btn" onClick={()=>setView("discover")}>browse topics</button>}
+                <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+                  {lastFailedAction&&isOnline&&<button className="gold-btn" onClick={retryLastAction}>↺ retry</button>}
+                  {isOnline&&<button className="new-btn" onClick={()=>setView("discover")}>browse topics</button>}
+                </div>
               </div>
             ):showSkeleton?<ArticleSkeleton/>
             :current?(
