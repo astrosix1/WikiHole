@@ -59,7 +59,7 @@ export function AccessGate({ children }) {
   }
 
   if (state === 'loading') return <Spinner />;
-  if (state === 'granted' || state === 'no-supabase') return children;
+  if (state === 'granted') return children;
   return <Paywall reason={state} />;
 }
 
