@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import DOMPurify from 'dompurify';
 import SEED_ARTICLES from './data/seeds.js';
 import { generateQuizCardsLocally } from './utils/quizGenerator.js';
@@ -279,10 +279,20 @@ export default function WikiHole() {
   const optStyle=letter=>{if(!revealed)return{bg:"#fff",border:"#e2ddd6",color:"#1c1810"};if(letter===sq.answer)return{bg:"#f0faf2",border:"#4a9a60",color:"#2a6a40"};if(letter===selected)return{bg:"#fff5f5",border:"#d05050",color:"#a03030"};return{bg:"#fafafa",border:"#ece8e2",color:"#bbb"};};
   const showSkeleton=fetching&&!current;
 
-  // Discover filtering
-  const filteredDiscover = discoverSearch.trim()
-    ? SEED_KEYS.filter(k => k.includes(discoverSearch.toLowerCase()) || SEED_ARTICLES[k].title.toLowerCase().includes(discoverSearch.toLowerCase()) || SEED_ARTICLES[k].description.toLowerCase().includes(discoverSearch.toLowerCase()))
-    : null;
+  // Discover filtering (memoized to avoid recomputing on every render)
+  const filteredDiscover = useMemo(() => {
+    const q = discoverSearch.trim().toLowerCase();
+    if (!q) return null;
+    return SEED_KEYS.filter(k => k.includes(q) || SEED_ARTICLES[k].title.toLowerCase().includes(q) || SEED_ARTICLES[k].description.toLowerCase().includes(q));
+  }, [discoverSearch]);
+
+  // Reading time estimate for current article
+  const readingTime = useMemo(() => {
+    if (!current?.extract) return null;
+    const words = current.extract.trim().split(/\s+/).length;
+    const mins = Math.max(1, Math.round(words / 200));
+    return `~${mins} min read`;
+  }, [current?.extract]);
 
   return (
     <>
@@ -300,7 +310,8 @@ export default function WikiHole() {
         .hole-btn:hover:not(:disabled){border-color:#b8832a;transform:translateX(4px);box-shadow:0 2px 8px rgba(184,131,42,0.12);}
         .hole-btn:disabled{opacity:0.4;cursor:not-allowed;}
         .discover-btn{width:100%;background:#fff;border:1.5px solid #e2ddd6;border-radius:10px;padding:12px 14px;cursor:pointer;text-align:left;transition:all 0.15s;display:flex;align-items:center;gap:10px;box-shadow:0 1px 2px rgba(0,0,0,0.04);}
-        .discover-btn:hover{border-color:#b8832a;background:#fffdf8;}
+        .discover-btn:hover:not(:disabled){border-color:#b8832a;background:#fffdf8;}
+        .discover-btn:disabled{opacity:0.45;cursor:not-allowed;}
         .session-card{width:100%;background:#fff;border:1.5px solid #e2ddd6;border-radius:14px;padding:18px;text-align:left;transition:all 0.2s;box-shadow:0 1px 4px rgba(0,0,0,0.04);}
         .session-card:hover{border-color:#b8832a;box-shadow:0 3px 12px rgba(184,131,42,0.1);transform:translateY(-1px);}
         .opt-btn{width:100%;border-radius:10px;padding:13px 15px;cursor:pointer;font-family:'Lora',Georgia,serif;font-size:15px;line-height:1.5;transition:all 0.15s;display:flex;align-items:flex-start;gap:10px;border-width:1.5px;border-style:solid;text-align:left;}
@@ -366,7 +377,16 @@ export default function WikiHole() {
           {view==="discover"&&(
             <div className="card-in">
               <div style={{marginTop:24,marginBottom:16}}>
-                <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:"#1c1810",marginBottom:4}}>Discover</h2>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                  <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:"#1c1810"}}>Discover</h2>
+                  <button
+                    className="ghost-btn"
+                    style={{fontSize:11,padding:"5px 12px"}}
+                    disabled={fetching||loading}
+                    onClick={()=>startWith(SEED_ARTICLES[SEED_KEYS[Math.floor(Math.random()*SEED_KEYS.length)]].title)}
+                    title="Jump to a random article"
+                  >🎲 Surprise me</button>
+                </div>
                 <p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#aaa",marginBottom:16}}>{SEED_KEYS.length} articles · all instant load</p>
 
                 {/* ── Custom topic input ── */}
@@ -387,11 +407,13 @@ export default function WikiHole() {
                       style={{flex:1,marginBottom:0}}
                       autoComplete="off"
                       maxLength={120}
+                      disabled={fetching||loading}
                     />
                     <button
                       type="submit"
                       className="gold-btn"
                       style={{whiteSpace:"nowrap",padding:"0 16px"}}
+                      disabled={fetching||loading}
                     >Go →</button>
                   </form>
                   <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#bbb",marginTop:6}}>e.g. "Black hole", "Napoleon", "Coral reefs"</p>
@@ -407,7 +429,7 @@ export default function WikiHole() {
                     : filteredDiscover.map(key=>{
                         const a=SEED_ARTICLES[key];
                         return(
-                          <button key={key} className="discover-btn" onClick={()=>startWith(a.title)}>
+                          <button key={key} className="discover-btn" disabled={fetching||loading} onClick={()=>startWith(a.title)}>
                             <div style={{flex:1,minWidth:0}}>
                               <p style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:"#1c1810",marginBottom:2}}>{a.title}</p>
                               <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#999",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.description}</p>
@@ -426,7 +448,7 @@ export default function WikiHole() {
                       {keys.map(key=>{
                         const a=SEED_ARTICLES[key];if(!a)return null;
                         return(
-                          <button key={key} className="discover-btn" onClick={()=>startWith(a.title)}>
+                          <button key={key} className="discover-btn" disabled={fetching||loading} onClick={()=>startWith(a.title)}>
                             <div style={{flex:1,minWidth:0}}>
                               <p style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700,color:"#1c1810",marginBottom:2}}>{a.title}</p>
                               <p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#999",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.description}</p>
@@ -548,12 +570,15 @@ export default function WikiHole() {
               <div key={animKey} className="card-in">
                 {current.imageUrl&&!imgError&&(
                   <div style={{margin:"22px 0 0",borderRadius:14,overflow:"hidden",height:210,background:"#e8e4dc",position:"relative",boxShadow:"0 2px 12px rgba(0,0,0,0.08)"}}>
-                    <img src={current.imageUrl} alt={current.title} onError={()=>setImgError(true)} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                    <img src={current.imageUrl} alt={current.title} loading="lazy" decoding="async" onError={()=>setImgError(true)} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
                     <div style={{position:"absolute",inset:0,background:"linear-gradient(to bottom, transparent 55%, rgba(245,242,236,0.65))"}}/>
                   </div>
                 )}
                 <div style={{marginTop:22}}>
-                  {current.description&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#b8832a",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>{sanitizeText(current.description)}</p>}
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    {current.description&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#b8832a",letterSpacing:"0.1em",textTransform:"uppercase"}}>{sanitizeText(current.description)}</p>}
+                    {readingTime&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#bbb",flexShrink:0,marginLeft:8}}>{readingTime}</span>}
+                  </div>
                   <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(24px,5.5vw,36px)",fontWeight:700,lineHeight:1.15,letterSpacing:"-0.02em",color:"#1c1810",marginBottom:14}}>{sanitizeText(current.title)}</h1>
                   <p style={{fontSize:16,lineHeight:1.85,color:"#4a4438"}}>{sanitizeText(current.extract)}</p>
                   {current.wikiUrl&&(<div style={{marginTop:14}}><a href={current.wikiUrl} target="_blank" rel="noopener noreferrer" className="wiki-link"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Read full article on Wikipedia</a></div>)}
