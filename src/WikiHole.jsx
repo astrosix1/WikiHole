@@ -273,6 +273,20 @@ export default function WikiHole() {
 
   useEffect(()=>{startWith(SEED_KEYS[Math.floor(Math.random()*SEED_KEYS.length)]);}, []);
 
+  // Left/right arrow keys step back and forth through the reading trail —
+  // mirrors clicking a breadcrumb, just faster for keyboard users.
+  useEffect(()=>{
+    const onKey=e=>{
+      if(view!=="article"||trail.length<2)return;
+      const tag=document.activeElement?.tagName;
+      if(tag==="INPUT"||tag==="TEXTAREA")return;
+      if(e.key==="ArrowLeft"&&currentIndex>0)jumpTo(currentIndex-1);
+      else if(e.key==="ArrowRight"&&currentIndex<trail.length-1)jumpTo(currentIndex+1);
+    };
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  }, [view,trail,currentIndex]);
+
   const current=trail[currentIndex];const depth=currentIndex;
   const isLinkOffline=t=>!!SEED_ARTICLES[t.toLowerCase()]||cachedKeys.has(t.toLowerCase())||!!prefetched[t.toLowerCase()];
   const sq=sessionQueue[sessionIndex],isCorrect=sq&&selected===sq.answer;
@@ -351,9 +365,9 @@ export default function WikiHole() {
             <div style={{width:6,height:6,borderRadius:"50%",background:isOnline?"#4a9a60":"#cc8820"}}/>
             {(view==="article"||view==="trails"||view==="discover")&&(<>
               {dueCount>0&&<button className="gold-btn" onClick={startReview}>↩ {dueCount}</button>}
-              <button className="ghost-btn" onClick={()=>setView(v=>v==="discover"?"article":"discover")} style={{padding:"7px 10px"}}>🔭</button>
-              <button className="ghost-btn" onClick={()=>setView(v=>v==="trails"?"article":"trails")} style={{padding:"7px 10px"}}>🕳</button>
-              {view==="article"&&<button className="new-btn" disabled={fetching||loading||!isOnline} onClick={()=>startWith(SEED_KEYS[Math.floor(Math.random()*SEED_KEYS.length)])}>↺</button>}
+              <button className="ghost-btn" aria-label="Toggle Discover" onClick={()=>setView(v=>v==="discover"?"article":"discover")} style={{padding:"7px 10px"}}>🔭</button>
+              <button className="ghost-btn" aria-label="Toggle Trails" onClick={()=>setView(v=>v==="trails"?"article":"trails")} style={{padding:"7px 10px"}}>🕳</button>
+              {view==="article"&&<button className="new-btn" aria-label="Surprise me with a random article" disabled={fetching||loading||!isOnline} onClick={()=>startWith(SEED_KEYS[Math.floor(Math.random()*SEED_KEYS.length)])}>↺</button>}
             </>)}
             {(view==="quiz"||view==="review")&&<button className="new-btn" onClick={goBack}>← back</button>}
           </div>
