@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 
-const ESSENTIALS_SLUG = 'basic'; // Essentials plan slug in Supabase projects table
+const WIKIHOLE_SLUG = 'wikihole'; // this app's row in the Supabase projects table
+const ADMIN_EMAILS = ['collins.nick999@gmail.com']; // matches asixstud-portfolio's dashboard bypass
 
 export function AccessGate({ children }) {
   // 'loading' | 'granted' | 'unauthenticated' | 'denied' | 'no-supabase'
@@ -35,11 +36,14 @@ export function AccessGate({ children }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setState('unauthenticated'); return; }
 
-      // ── Subscription check: look for active Essentials (basic) sub ──────
+      // ── Admin bypass: owner always has access, no subscription needed ───
+      if (user.email && ADMIN_EMAILS.includes(user.email)) { setState('granted'); return; }
+
+      // ── Subscription check: look for an active sub tied to this app ─────
       const { data: project } = await supabase
         .from('projects')
         .select('id')
-        .eq('slug', ESSENTIALS_SLUG)
+        .eq('slug', WIKIHOLE_SLUG)
         .single();
 
       if (!project) { setState('denied'); return; }
@@ -80,18 +84,18 @@ function Paywall({ reason }) {
       <div style={{ maxWidth: 400, textAlign: 'center' }}>
         <p style={{ fontSize: 40, marginBottom: 16 }}>🕳️</p>
         <h1 style={{ fontFamily: 'Georgia, serif', fontSize: 26, fontWeight: 700, color: '#1c1810', marginBottom: 8 }}>
-          {isUnauth ? 'Sign in to continue' : 'WikiHole is included in Essentials'}
+          {isUnauth ? 'Sign in to continue' : 'Subscription required'}
         </h1>
         <p style={{ fontFamily: 'monospace', fontSize: 13, color: '#888', lineHeight: 1.6, marginBottom: 28 }}>
           {isUnauth
             ? 'Head back to asix.live and log in, then launch WikiHole from your dashboard.'
-            : 'Get the Essentials plan for $4.99/mo and unlock WikiHole plus the full toolkit.'}
+            : "You'll need an active WikiHole subscription to continue — check your plan on your asix.live dashboard."}
         </p>
         <a
-          href="https://asix.live/projects"
+          href="https://asix.live/dashboard"
           style={{ display: 'inline-block', padding: '12px 28px', background: '#b8832a', color: '#fff', borderRadius: 8, fontFamily: 'monospace', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
         >
-          {isUnauth ? 'Go to asix.live →' : 'Get Essentials →'}
+          {isUnauth ? 'Go to asix.live →' : 'Go to dashboard →'}
         </a>
       </div>
     </div>
