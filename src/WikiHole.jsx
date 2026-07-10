@@ -99,8 +99,25 @@ async function fetchWikiArticle(topic) {
     const sum=await sumRes.json();
     let links=[];
     try{
-      const relRes=await fetch(`https://en.wikipedia.org/api/rest_v1/page/related/${encoded}`,{headers:{Accept:'application/json'}});
-      if(relRes.ok){const rel=await relRes.json();links=(rel.pages||[]).slice(0,3).map(p=>({title:p.titles?.normalized||p.title,description:p.description||p.extract?.slice(0,90)||''}));}
+      // Wikipedia's REST "related pages" endpoint was decommissioned — use
+      // the still-supported Action API's `links` module (in-article
+      // wikilinks) instead, then batch-fetch short descriptions for a few
+      // of them picked at random so the same article doesn't always offer
+      // the same holes.
+      const linksRes=await fetch(`https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=links&titles=${encoded}&plnamespace=0&pllimit=30`);
+      if(linksRes.ok){
+        const linksData=await linksRes.json();
+        const page=Object.values(linksData.query?.pages||{})[0];
+        const pool=(page?.links||[]).map(l=>l.title);
+        const picked=[];
+        while(picked.length<3&&pool.length)picked.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]);
+        if(picked.length){
+          const titlesParam=picked.map(encodeURIComponent).join('|');
+          const exRes=await fetch(`https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=extracts&exintro=1&explaintext=1&exchars=90&titles=${titlesParam}`);
+          const exPages=exRes.ok?Object.values((await exRes.json()).query?.pages||{}):[];
+          links=picked.map(title=>({title,description:exPages.find(p=>p.title===title)?.extract||''}));
+        }
+      }
     }catch(_){}
     return{title:sum.titles?.normalized||sum.title,description:sum.description||'',extract:sum.extract||'',imageUrl:sum.thumbnail?.source||null,wikiUrl:sum.content_urls?.desktop?.page||`https://en.wikipedia.org/wiki/${encoded}`,links};
   });
